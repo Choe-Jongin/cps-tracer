@@ -5,7 +5,8 @@
 #define CPS_TRACER_HBLK_H_
 
 #include <linux/kernel.h>
-#include <string.h>
+#include <linux/string.h>
+
 // for call stack
 #define CPS_MAX_CALLSTACK 16
 #define CPS_CALLER __builtin_frame_address(1)
