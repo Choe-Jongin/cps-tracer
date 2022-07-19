@@ -69,8 +69,19 @@ value 생략시 자동으로 file:파일명으로 간주 *단 rm만 입력한 �
 
 원하는 파일에 추적코드 삽입 후 매번 재 컴파일 하는 번거로움을 줄이기 위해 도입 된 기능
 
-추적 코드를 삽입하고 나면 디렉토리에 cps_target.txt파일이 생성됨
-원하는 추적 수준밑에 파일과 해당 파일 내 함수 목록 작성
+추적 코드를 삽입하고 나면 디렉토리에 cps_target.txt 파일이 생성됨. 원하는 추적 수준밑에 파일과 해당 파일 내 함수 목록 작성
+```
+$ cat /usr/src/OpenChannelSSD/drivers/lightnvm/cps_target.txt 
+LEVEL 0
+pblk-core.c *
+...
+pblk-write.c *
+pblk-recovery.c pblk_end_io_recov
+LEVEL 1
+LEVEL 2
+pblk-recovery.c *
+pblk-init.c *
+```
 
 LEVEL 0 추적하지 않음
 
