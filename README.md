@@ -97,14 +97,14 @@ LEVEL 2에 '파일명 *'이 있어도 LEVEL 0에 '파일명 특정함수'가 적
 
 **Target mode 모드 사용**
 
-타겟모드를 사용하기 시작 할 시점에  CPS_LEAD_TARGET_FILE("/usr/src/OpenChannelSSD/drivers/lightnvm/cps_target.txt") 함수 삽입
+타겟모드를 사용하기 시작 할 시점에  CPS_READ_TARGET_FILE("/usr/src/[**리눅스커널**]/drivers/lightnvm/cps_target.txt") 함수 삽입
 
 제대로 타겟 리스트 파일이 불러와 지 않을것을 대비한 예외처리 가능(파일 읽기 성공시 0반환)
 ```
-if (CPS_LEAD_TARGET_FILE("/usr/src/OpenChannelSSD/drivers/lightnvm/cps_target.txt") != 0)
-	if (CPS_LEAD_TARGET_FILE("drivers/lightnvm/cps_target.txt") != 0)
-		if (CPS_LEAD_TARGET_FILE("cps_target.txt") != 0)
-			if (CPS_LEAD_TARGET_FILE("/home/femu/cps_target.txt") != 0)
+if (CPS_READ_TARGET_FILE("/usr/src/OpenChannelSSD/drivers/lightnvm/cps_target.txt") != 0)
+	if (CPS_READ_TARGET_FILE("drivers/lightnvm/cps_target.txt") != 0)
+		if (CPS_READ_TARGET_FILE("cps_target.txt") != 0)
+			if (CPS_READ_TARGET_FILE("/home/femu/cps_target.txt") != 0)
 				CPS_MSG("fail target mode start");
 ```
 static void *pblk_init(...) 상단에 해당 코드 삽입 후 사용 가능
