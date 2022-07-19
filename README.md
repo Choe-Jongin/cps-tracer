@@ -26,9 +26,7 @@ char kstr[1024]         = "";
 //CPS Tracer Init End
 ```
 
-
-
-### 컴파일 및 실행
+### 컴파일 및 추적코드 삽입 삭제
 * 컴파일
 ```
 gcc pblk-cps-tracer.c -o cps_tracer
@@ -59,4 +57,46 @@ value 생략시 자동으로 file:파일명으로 간주 *단 rm만 입력한 �
 # 특정 파일들에게만 삽입
 ./cps_tracer pblk-init.c pblk-read.c 
 ```
+
+코드 삽입/삭제 후 커널 컴파일 수행
+
 ### 사용 방법
+
+**특정 파일 및 함수만 추적하는 Target mode**
+
+원하는 파일에 추적코드 삽입 후 매번 재 컴파일 하는 번거로움을 줄이기 위해 도입 된 기능
+
+추적 코드를 삽입하고 나면 디렉토리에 cps_target.txt파일이 생성됨
+원하는 추적 수준밑에 파일과 해당 파일 내 함수 목록 작성
+
+LEVEL 0 추적하지 않음
+
+LEVEL 1 추적은 하지만 실시간으로 화면에 표시하지 않음(KERN_INFO)
+
+LEVEL 2 추적을 하고 결과를 실시간으로 화면에 출력(KERN_ALERT)
+
+같은 파일명이 있으면 먼저(위 쪽에) 쓰여진 파일 우선
+
+함수명에 *은 파일 내 모든 함수 추적을 의미함
+
+LEVEL 2에 '파일명 *'이 있어도 LEVEL 0에 '파일명 특정함수'가 적혀 있으면 우선순위에 의해서 해당 함수만 추적 제외 가능
+
+
+**Target mode 모드 사용**
+
+타겟모드를 사용하기 시작 할 시점에  CPS_LEAD_TARGET_FILE("/usr/src/OpenChannelSSD/drivers/lightnvm/cps_target.txt") 함수 삽입
+
+제대로 타겟 리스트 파일이 불러와 지 않을것을 대비한 예외처리 가능(파일 읽기 성공시 0반환)
+```
+if (CPS_LEAD_TARGET_FILE("/usr/src/OpenChannelSSD/drivers/lightnvm/cps_target.txt") != 0)
+	if (CPS_LEAD_TARGET_FILE("drivers/lightnvm/cps_target.txt") != 0)
+		if (CPS_LEAD_TARGET_FILE("cps_target.txt") != 0)
+			if (CPS_LEAD_TARGET_FILE("/home/femu/cps_target.txt") != 0)
+				CPS_MSG("fail target mode start");
+```
+static void *pblk_init(...) 상단에 해당 코드 삽입 후 사용 가능
+
+pblk_module_init() 단계에선 파일 입출력이 정상적으로 시행되지 않아서 사용 불가능
+
+타겟모드를 시작하는 CPS_LEAD_TARGET_FILE 함수를 불러오기 전까진 모든 추적코드가 화면에 즉시 출력됨
+
