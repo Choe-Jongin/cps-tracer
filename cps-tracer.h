@@ -40,7 +40,7 @@ extern int CPS_FUNC_COUNT;
 extern char * current_filename;
 extern char kstr[1024];
 
-static inline int CPS_LEAD_TARGET_FILE(const char * tgtlistfile)
+static inline int CPS_READ_TARGET_FILE(const char * tgtlistfile)
 {
 	// already
 	if( CPS_TARGET_ONLY == 1)
