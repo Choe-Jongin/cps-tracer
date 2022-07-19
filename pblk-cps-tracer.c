@@ -28,6 +28,7 @@
 #define MAX_READ_BUFF 1024
 #define MAX_ARGS_BUFF 512
 
+int cps_fileopen(char *filename, int (*modify)(char *), int type, int *errcnt);
 int cps_insert(char *filename);
 int cps_remove(char *filename);
 int add_filelist(char filename[MAX_FILE_NAME], int *index, char *name);
@@ -36,13 +37,19 @@ void set_valid_char(char *dest, char c, int *index, const char *invalid);
 int parse_args(char *args_str, char *parsered_str);
 void replacefile(char * oldname, char * newname);
 
+char * str_modi_mode[2] = {" INSERT ", " REMOVE "};
+FILE * targetsfile;
+
 int main(int argc, char *argv[])
 {
 	int (*modify)(char *);
-	char filename[100][MAX_FILE_NAME];
+	char filenames[100][MAX_FILE_NAME];
 	int fileindex = 0;
 	int type = INSERT;
 	int errcnt = 0;
+
+	targetsfile = fopen("cps_target.txt", "w");
+	fprintf(targetsfile,"LEVEL 0\n");
 
 	// arg parsing
 	for (int i = 1; i < argc; i++)
@@ -59,14 +66,18 @@ int main(int argc, char *argv[])
 		// if no field:value form, field is considered a file name.
 		if (value == NULL)
 		{
-			add_filelist(filename[fileindex], &fileindex, field);
+			//if field is rm, it mean type:rm
+			if( strcmp(field, "rm") == 0)
+				type = REMOVE;
+			else
+				add_filelist(filenames[fileindex], &fileindex, field);
 			continue;
 		}
 
 		// assign a value to that field
 		if (strcmp(field, "file") == 0)
 		{
-			add_filelist(filename[fileindex], &fileindex, value);
+			add_filelist(filenames[fileindex], &fileindex, value);
 			continue;
 		}
 
@@ -100,14 +111,14 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < fileindex; i++)
 	{
 		// dir
-		if (filename[i][strlen(filename[i]) - 1] == '/')
+		if (filenames[i][strlen(filenames[i]) - 1] == '/')
 		{
 			DIR *dir;
 			struct dirent *ent;
 			char dirpath[256];
 
 			// check target directory
-			strcpy(dirpath, filename[i]);
+			strcpy(dirpath, filenames[i]);
 
 			dir = opendir(dirpath);
 			if (dir == NULL)
@@ -118,23 +129,18 @@ int main(int argc, char *argv[])
 
 			while ((ent = readdir(dir)) == NULL)
 			{
-				char pullpath[256] = "";
-				strcat(pullpath, dirpath);
-				strcat(pullpath, ent->d_name);
-				if (modify(pullpath) != 0)
-				{
-					++errcnt;
-				}
+				char fullpath[256] = "";
+				strcat(fullpath, dirpath);
+				strcat(fullpath, ent->d_name);
+				
+				cps_fileopen(fullpath, modify, type, &errcnt);
 			}
 
 			closedir(dir);
 		}
 		else // specific file
 		{
-			if (modify(filename[i]) != 0)
-			{
-				++errcnt;
-			}
+			cps_fileopen(filenames[i], modify, type, &errcnt);
 		}
 	}
 
@@ -142,13 +148,40 @@ int main(int argc, char *argv[])
 	{
 		printf("%d error\n", errcnt);
 	}
+
+
+	fprintf(targetsfile,"LEVEL 1\n");
+	fprintf(targetsfile,"LEVEL 2\n");
 	printf("finish\n");
+	return 0;
+}
+
+int cps_fileopen(char *filename, int (*modify)(char *), int type, int * errcnt)
+{
+	printf("[%s]%-20s", str_modi_mode[type], filename);
+
+	if (modify(filename) != 0)
+	{
+		++(*errcnt);
+		return 1;
+	}
+
+	int filestart_i = strlen(filename);
+	while (filestart_i > 0 && filename[filestart_i-1] != '/')
+		filestart_i--;
+	
+	fprintf(targetsfile,"%s *\n", &filename[filestart_i]);
+	printf("Done.\n");
 	return 0;
 }
 
 // add trace code
 int cps_insert(char *filename)
 {
+	//remove first
+	if(cps_remove(filename) != 0)
+		return 1;		// remove fail!!
+
 	FILE *fin = fopen(filename, "r");
 	FILE *fout = fopen(".cps-temp.c", "w");
 	char read_str[MAX_READ_BUFF];
@@ -164,9 +197,6 @@ int cps_insert(char *filename)
 	int comment = 0;	  // is comment?
 	int func_read = 0;	  // function block start
 
-	// success file open
-	printf("[%s]%-20s", " INSERT ", filename);
-
 	if (fin == NULL || fout == NULL)
 	{
 		fprintf(stderr, "can't open the %s\n", filename);
@@ -178,6 +208,8 @@ int cps_insert(char *filename)
 		printf("no header\n");
 		return 1;
 	}
+
+	// success file open
 
 	//read one line
 	while (fgets(read_str, MAX_READ_BUFF, fin) != NULL)
@@ -274,8 +306,8 @@ int cps_insert(char *filename)
 	fclose(fout);
 
 	replacefile(".cps-temp.c", filename);
+	
 	// success insert
-	printf("Done.\n");
 	return 0;
 }
 
@@ -291,9 +323,7 @@ int cps_remove(char *filename)
 		fprintf(stderr, "can't open the %s\n", filename);
 		return 1;
 	}
-
-	printf("[%s]%-20s", " REMOVE ", filename);
-
+	
 	while (fgets(read_str, MAX_READ_BUFF, fin) != NULL)
 	{
 		if( strstr(read_str, "CPS_FUNCTION") == NULL )
@@ -304,7 +334,6 @@ int cps_remove(char *filename)
 	fclose(fout);
 
 	replacefile(".cps-temp.c", filename);
-	printf("Done.\n");
 	return 0;
 }
 
@@ -446,11 +475,17 @@ int have_header(char *filename)
 // add file to file list(Add only files that meet the conditions)
 int add_filelist(char filename[MAX_FILE_NAME], int *index, char *name)
 {
+	//find this file name without directory
 	int filestart_i = strlen(__FILE__);
-	while (filestart_i > 0 && __FILE__[--filestart_i] != '/')
-		;
-	if (strstr(&(__FILE__[filestart_i]), name) != NULL)
+	while (filestart_i > 0 && __FILE__[filestart_i-1] != '/')
+		filestart_i--;
+
+	// if (strstr(&(__FILE__[filestart_i]), name) != NULL)
+	// 	return 0;
+
+	if (strstr(name, &(__FILE__[filestart_i])) != NULL)
 		return 0;
+
 	if (name[strlen(name) - 2] != '.' || name[strlen(name) - 1] != 'c')
 		return 0;
 

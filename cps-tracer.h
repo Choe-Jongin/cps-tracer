@@ -1,11 +1,32 @@
-
-/*****************   CPS  ****************/
+/*****************   CPS   ****************/
 
 #ifndef CPS_TRACER_HBLK_H_
 #define CPS_TRACER_HBLK_H_
 
+#include <linux/module.h> 
 #include <linux/kernel.h>
 #include <linux/string.h>
+//file read
+#include <linux/fs.h>      // Needed by filp
+#include <asm/uaccess.h>   // Needed by segment descriptors
+#include<linux/file.h>
+
+
+
+
+// for TARGET 
+#define CPS_MAX_TGT_FILE 20	// max target file number
+
+typedef struct
+{
+	int level;
+	char name[256];
+	char func[256];
+}CPS_tgt_file;
+
+extern CPS_tgt_file CPS_tgt_files[CPS_MAX_TGT_FILE];
+extern int CPS_TARGET_ONLY;
+extern int CPS_TGT_FILE_NUM;
 
 // for call stack
 #define CPS_MAX_CALLSTACK 16
@@ -18,6 +39,125 @@ extern void *CPS_FUNC_ADDR[CPS_MAX_CALLSTACK];
 extern int CPS_FUNC_COUNT;
 extern char * current_filename;
 extern char kstr[1024];
+
+static inline int CPS_LEAD_TARGET_FILE(const char * tgtlistfile)
+{
+	// already
+	if( CPS_TARGET_ONLY == 1)
+	{
+		CPS_TGT_FILE_NUM = 0;
+	}
+
+	char * start;
+	int linelen;
+	int hasnext;
+	int level;
+	int i;
+
+	char buf[1024];
+	struct file *fp;
+	loff_t pos = 0;
+	int offset = 0;
+	
+	for( i = 0 ; i < 1024 ; i++)
+		buf[i] = '\0';
+
+	/*open the file in read mode*/
+	fp = filp_open(tgtlistfile, O_RDONLY, 0);
+	if (IS_ERR(fp))
+	{
+		printk(KERN_ALERT "CPSERR - Cannot open the file %s %ld\n", tgtlistfile, PTR_ERR(fp));
+		return -1;
+	}
+
+	/*Read the data to the end of the file*/
+	buf[kernel_read(fp, buf, sizeof(buf), &pos)] = '\0';
+
+	filp_close(fp, NULL);
+
+	// read check
+	// printk(KERN_ALERT "CPS - target file[%s]", tgtlistfile);
+	// printk(KERN_ALERT "%s", buf);
+
+	// parsing by line
+	start = &buf[0];
+	linelen = 0;
+	hasnext = 1;
+	level = 0;
+
+	// parsing line and make CPS_tgt_file Object
+	while (hasnext)
+	{
+		while (start[linelen] != '\n' && start[linelen] != '\0')
+			linelen++;
+
+		// Log Level setting
+		if( strncmp(start,"LEVEL", 5) == 0 )
+		{
+			level = start[6] - '0'; 
+			start = &start[8];
+			linelen = 0;
+			continue;
+		}
+
+		// check last char
+		if (start[linelen] == '\0')
+			hasnext = false;
+		else
+			start[linelen] = '\0';
+
+		// regist
+		if (strlen(start) > 0 && CPS_TGT_FILE_NUM < CPS_MAX_TGT_FILE - 1)
+		{
+			CPS_tgt_files[CPS_TGT_FILE_NUM].level = level;
+
+			char * func = start;
+			while(func[0] != ' ')
+				func++;
+			func[0] = '\0';
+			func++;
+			strcpy(CPS_tgt_files[CPS_TGT_FILE_NUM].name, start);
+			strcpy(CPS_tgt_files[CPS_TGT_FILE_NUM].func, func);
+			CPS_TGT_FILE_NUM++;
+		}
+		start = &start[++linelen];
+		linelen = 0;
+	}
+
+	printk(KERN_ALERT "CPS - Opened the %s successfully(%d)\n", tgtlistfile, CPS_TGT_FILE_NUM);
+	// Target file object check;
+	// printk(KERN_ALERT "CPS - Target File List");
+	// for( i = 0 ; i < CPS_TGT_FILE_NUM ; i++ )
+	// 	printk(KERN_ALERT "CPS - [LEVEL %d %s:%s]\n", CPS_tgt_files[i].level , CPS_tgt_files[i].name, CPS_tgt_files[i].func);
+
+	CPS_TARGET_ONLY = 1; 	// trace target only
+	return 0;
+}
+static inline int CPS_GET_TARGET_LEVEL( const char * filename, const char * funcname )
+{
+	int tgt_i;
+
+	if( CPS_TARGET_ONLY == 0 )
+		return 2;					// if not target mode, return KERN_ALERT
+
+	int filestart_i = strlen(filename);
+	while(filestart_i > 0 && filename[filestart_i-1] != '/')
+		filestart_i--;
+
+	for(tgt_i = 0 ; tgt_i < CPS_TGT_FILE_NUM ; tgt_i++)
+	{
+		if( strcmp(&filename[filestart_i], CPS_tgt_files[tgt_i].name) == 0 )
+		{
+			// printk(KERN_ALERT "CPS - %s : %s \n", funcname, CPS_tgt_files[tgt_i].func);
+			if( strcmp(CPS_tgt_files[tgt_i].func, "*") == 0 )
+				return CPS_tgt_files[tgt_i].level;
+			if( strstr(CPS_tgt_files[tgt_i].func, funcname) != NULL )
+				return CPS_tgt_files[tgt_i].level;
+		}
+	}
+
+	return 0;
+}
 
 static inline void CPS_OPEN_FUNC(void *caller, void *callee)
 {
@@ -54,27 +194,37 @@ static inline void CPS_OPEN_FUNC(void *caller, void *callee)
 
 static inline void CPS_FUNCTION(void *caller, void *callee, const char * filename, const char * funcname, int argc, ...)
 {
+	int cps_level = CPS_GET_TARGET_LEVEL(filename, funcname);
+	char * log_level = KERN_ALERT;
+	if( cps_level == 0 )
+		return ;
+	else if (cps_level == 1)
+		log_level = KERN_INFO;
+	else if (cps_level == 2)
+		log_level = KERN_ALERT;
+
 	char tab_str[CPS_MAX_CALLSTACK*2] = "";
 	int filestart_i = strlen(filename);
 	int cps_i;
 	int tab_i;
 	va_list ap;
+	
 	++CPS_FUNC_COUNT;
 
 	//filename without path
-	while(filestart_i > 0 && filename[--filestart_i] != '/')
-		;
+	while(filestart_i > 0 && filename[filestart_i-1] != '/')
+		filestart_i--;
 
 	//if diffent file, show file name
 	if( current_filename != filename )
 	{
-		sprintf(kstr,"%s\033[0;31mCPS -\e[1m in %s\e[m\033[0m", KERN_ALERT, &(filename[filestart_i+1]));
+		sprintf(kstr,"%s\033[0;31mCPS -\e[1m in %s\e[m\033[0m", log_level, &(filename[filestart_i]));
 		printk(kstr);
 	}
 
 	// check call stack
-	if( caller > 0x1 && callee > 0x1)
-		printk("%psCaller:%ps Callee:%ps\n", KERN_INFO, caller, callee);
+	// if( caller > 0x1 && callee > 0x1)
+	// 	printk("%psCaller:%ps Callee:%ps\n", KERN_INFO, caller, callee);
 
 	CPS_OPEN_FUNC(caller, callee);
 	for (tab_i= 0; tab_i < CPS_CALL_DEEP*2; tab_i++)
@@ -86,7 +236,7 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 	}
 	
 	//_builtin_return_address(0);
-	sprintf(kstr,"%s\033[0;31mCPS[%d] - %s\e[1m%s\e[m\033[0m", KERN_ALERT, CPS_FUNC_COUNT, tab_str, funcname);
+	sprintf(kstr,"%s\033[0;31mCPS[%d] - %s\e[1m%s\e[m\033[0m", log_level, CPS_FUNC_COUNT, tab_str, funcname);
 	
 	//print args
 	va_start(ap, argc);
@@ -119,10 +269,9 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 }
 static inline void CPS_MSG(const char *str)
 {
-	char kstr[256];
-	
 	sprintf(kstr,"%s\033[0;31mCPSMSG -\e[1m %s\e[m\033[0m",
 		KERN_ALERT , str);
 	printk(kstr);
 }
+
 #endif /* CPS_TRACER_HBLK_H_ */
