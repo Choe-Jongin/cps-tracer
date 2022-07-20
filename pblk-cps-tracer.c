@@ -37,7 +37,7 @@ void set_valid_char(char *dest, char c, int *index, const char *invalid);
 int parse_args(char *args_str, char *parsered_str);
 void replacefile(char * oldname, char * newname);
 
-char * str_modi_mode[2] = {" INSERT ", " REMOVE "};
+char * str_modi_mode[2] = {" \033[0;32mINSERT\033[0m ", " \033[0;31mREMOVE\033[0m "};
 FILE * targetsfile;
 
 int main(int argc, char *argv[])
