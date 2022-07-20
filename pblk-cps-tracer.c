@@ -209,7 +209,11 @@ int cps_insert(char *filename)
 		return 1;
 	}
 
-	// success file open
+	/* success file open  */
+
+	// for call stack
+	// fputs("#pragma GCC push_options //CPS_FUNCTION Save current options\n", fout);
+	// fputs("#pragma GCC optimize (\"no-optimize-sibling-calls\") //CPS_FUNCTION\n", fout);
 
 	//read one line
 	while (fgets(read_str, MAX_READ_BUFF, fin) != NULL)
@@ -301,6 +305,9 @@ int cps_insert(char *filename)
 		if (comment == 2)
 			comment = 0;
 	}
+
+	// for call stack end
+	// fputs("#pragma GCC pop_options  //CPS_FUNCTION Restore saved options\n", fout);
 
 	fclose(fin);
 	fclose(fout);

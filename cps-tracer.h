@@ -11,8 +11,9 @@
 #include <asm/uaccess.h>   // Needed by segment descriptors
 #include<linux/file.h>
 
-
-
+// #pragma GCC optimize ("no-optimize-sibling-calls")
+// #pragma GCC optimize ("O1")
+// #pragma GCC optimize ("no-omit-frame-pointer")
 
 // for TARGET 
 #define CPS_MAX_TGT_FILE 20	// max target file number
@@ -30,8 +31,8 @@ extern int CPS_TGT_FILE_NUM;
 
 // for call stack
 #define CPS_MAX_CALLSTACK 16
-#define CPS_CALLER __builtin_frame_address(1)
-#define CPS_CALLEE __builtin_frame_address(0)
+#define CPS_CALLER __builtin_frame_address(1) > (void*)0x1? __builtin_return_address(1) : __builtin_frame_address(1)
+#define CPS_CALLEE __builtin_return_address(0)
 extern int CPS_CALL_DEEP;
 extern void *CPS_FUNC_ADDR[CPS_MAX_CALLSTACK];
 
@@ -161,35 +162,11 @@ static inline int CPS_GET_TARGET_LEVEL( const char * filename, const char * func
 
 static inline void CPS_OPEN_FUNC(void *caller, void *callee)
 {
-	if( caller <= 0x01 )
-	{
-		CPS_FUNC_ADDR[0] = callee;
-        CPS_CALL_DEEP = 0;
-        return;
-	}
-
-    int i;
-    for (i = CPS_CALL_DEEP; i >= 0; i--)
-    {
-        if (CPS_FUNC_ADDR[i] == caller)
-        {
-            CPS_CALL_DEEP = i;
-            break;
-        }
-    }
-
-    // fail to find caller(first call)
-    if (i < 0)
-    {
-        CPS_FUNC_ADDR[0] = callee;
-        CPS_CALL_DEEP = 0;
-        return;
-    }
+    while(CPS_CALL_DEEP >= 0 && CPS_FUNC_ADDR[CPS_CALL_DEEP] != caller)
+        CPS_CALL_DEEP--;
 
     if (++CPS_CALL_DEEP < CPS_MAX_CALLSTACK)
-    {
         CPS_FUNC_ADDR[CPS_CALL_DEEP] = callee;
-    }
 }
 
 static inline void CPS_FUNCTION(void *caller, void *callee, const char * filename, const char * funcname, int argc, ...)
@@ -223,8 +200,7 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 	}
 
 	// check call stack
-	// if( caller > 0x1 && callee > 0x1)
-	// 	printk("%psCaller:%ps Callee:%ps\n", KERN_INFO, caller, callee);
+	// printk("%s Caller:%ps  Callee:%ps\n", log_level, caller, callee);
 
 	CPS_OPEN_FUNC(caller, callee);
 	for (tab_i= 0; tab_i < CPS_CALL_DEEP*2; tab_i++)
