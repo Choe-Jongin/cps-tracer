@@ -185,6 +185,7 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 	int cps_i;
 	int tab_i;
 	va_list ap;
+	void * p_primi;
 	
 	++CPS_FUNC_COUNT;
 
@@ -193,11 +194,11 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 		filestart_i--;
 
 	//if diffent file, show file name
-	if( current_filename != filename )
-	{
-		sprintf(kstr,"%s\033[0;31mCPS -\e[1m in %s\e[m\033[0m", log_level, &(filename[filestart_i]));
-		printk(kstr);
-	}
+	// if( current_filename != filename )
+	// {
+	// 	sprintf(kstr,"%s\033[0;31mCPS -\e[1m in %s\e[m\033[0m", log_level, &(filename[filestart_i]));
+	// 	printk(kstr);
+	// }
 
 	// check call stack
 	// printk("%s Caller:%ps  Callee:%ps\n", log_level, caller, callee);
@@ -212,7 +213,7 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 	}
 	
 	//_builtin_return_address(0);
-	sprintf(kstr,"%s\033[0;31mCPS[%d] - %s\e[1m%s\e[m\033[0m", log_level, CPS_FUNC_COUNT, tab_str, funcname);
+	sprintf(kstr,"%s\033[0;31mCPS[%d] - %s\e[1m%s->%s\e[m\033[0m", log_level, CPS_FUNC_COUNT, tab_str, &filename[filestart_i], funcname);
 	
 	//print args
 	va_start(ap, argc);
@@ -221,21 +222,36 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 		int currentlen = strlen(kstr);
 		char * typestr  = va_arg(ap, char*);
 		char * varname  = va_arg(ap, char*);
+		p_primi = NULL;
 
 		//type and name
 		sprintf(&(kstr[currentlen]), " [%s %s", (const char *)typestr, (const char *)varname);
-
 		//value by type
 		currentlen = strlen(kstr);
 		if(		 strcmp(typestr,"char *")==0)		sprintf(&(kstr[currentlen]), ":%s]",va_arg(ap, char*));
 		else if( strcmp(typestr,"const char *")==0)	sprintf(&(kstr[currentlen]), ":%s]", va_arg(ap, char*));
+		else if( strcmp(typestr,"int *")==0)		sprintf(&(kstr[currentlen]), ":%p(%d)]",
+															 (int*)(p_primi!=NULL?p_primi:(p_primi=va_arg(ap, int*))), 
+															*(int*)(p_primi!=NULL?p_primi:(p_primi=va_arg(ap, int*))));
+		else if( strcmp(typestr,"unsigned int *")==0)		sprintf(&(kstr[currentlen]), ":%p(%u)]",
+															 (unsigned int*)(p_primi!=NULL?p_primi:(p_primi=va_arg(ap, int*))), 
+															*(unsigned int*)(p_primi!=NULL?p_primi:(p_primi=va_arg(ap, int*))));
+		else if( strcmp(typestr,"long *")==0)		sprintf(&(kstr[currentlen]), ":%p(%d)]",
+															 (long*)(p_primi!=NULL?p_primi:(p_primi=va_arg(ap, long*))), 
+															*(long*)(p_primi!=NULL?p_primi:(p_primi=va_arg(ap, long*))));
+		else if( strcmp(typestr,"unsigned long *")==0)		sprintf(&(kstr[currentlen]), ":%p(%lu)]",
+															 (unsigned long*)(p_primi!=NULL?p_primi:(p_primi=va_arg(ap, long*))), 
+															*(unsigned long*)(p_primi!=NULL?p_primi:(p_primi=va_arg(ap, long*))));
 		else if( typestr[strlen(typestr)-1] == '*')	sprintf(&(kstr[currentlen]), ":%ps]", va_arg(ap, void*));
 		else if( strcmp(typestr,"int")==0)			sprintf(&(kstr[currentlen]), ":%d]", va_arg(ap, int));
+		else if( strcmp(typestr,"unsigned int")==0)	sprintf(&(kstr[currentlen]), ":%u]", va_arg(ap, int));
 		else if( strcmp(typestr,"long")==0)			sprintf(&(kstr[currentlen]), ":%ld]", va_arg(ap, long));
+		else if( strcmp(typestr,"unsigned long")==0)sprintf(&(kstr[currentlen]), ":%lu]", va_arg(ap, long));
 		else if( strcmp(typestr,"float")==0)		sprintf(&(kstr[currentlen]), ":%f]", va_arg(ap, float));
 		else if( strcmp(typestr,"double")==0)		sprintf(&(kstr[currentlen]), ":%f]", va_arg(ap, float));
 		else if( strcmp(typestr,"char")==0)			sprintf(&(kstr[currentlen]), ":%c]", va_arg(ap, char));
-		else										sprintf(&(kstr[currentlen]), ":%d]", va_arg(ap, int));
+		else if( strcmp(typestr,"bool")==0)			sprintf(&(kstr[currentlen]), ":%d]", va_arg(ap, int));
+		else										sprintf(&(kstr[currentlen]), ":etc]", va_arg(ap, int));
 	}
 
 	printk(kstr);
