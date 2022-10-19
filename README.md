@@ -9,6 +9,7 @@
 추적할 함수가 정의된 파일에 cps-tracer.h을 include해야 함
 
 lightnvm 모듈에선 pblk.h에 포함시켜 사용
+
 **c파일 중 한 곳에서  extern 변수 초기화를 진행해야함**
 
 해당 폴더에선 pblk-cps-tracer.c 상단에서 초기화 하여 사용
