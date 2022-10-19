@@ -15,15 +15,6 @@
 // #pragma GCC optimize ("O1")
 // #pragma GCC optimize ("no-omit-frame-pointer")
 
-
-// for MSG
-#define CPS_MSG_RED "\033[0;31m"
-#define CPS_MSG_BOLD "\e[1m"
-#define CPS_MSG_DEF "\e[m\033[0m"
-#define CPS_MSG_RB(s) CPS_MSG_RED CPS_MSG_BOLD s CPS_MSG_DEF
-#define CPS_MSG(s) printk(KERN_ALERT CPS_MSG_RB(s))
-#define CPS_MSG_ARGS(...) printk(KERN_ALERT"CPSMSG - "__VA_ARGS__)
-
 // for TARGET 
 #define CPS_MAX_TGT_FILE 20	// max target file number
 
@@ -85,10 +76,6 @@ static inline int CPS_READ_TARGET_FILE(const char * tgtlistfile)
 
 	filp_close(fp, NULL);
 
-	// read check
-	// printk(KERN_ALERT "CPS - target file[%s]", tgtlistfile);
-	// printk(KERN_ALERT "%s", buf);
-
 	// parsing by line
 	start = &buf[0];
 	linelen = 0;
@@ -112,7 +99,7 @@ static inline int CPS_READ_TARGET_FILE(const char * tgtlistfile)
 
 		// check last char
 		if (start[linelen] == '\0')
-			hasnext = 0;
+			hasnext = false;
 		else
 			start[linelen] = '\0';
 
@@ -135,12 +122,8 @@ static inline int CPS_READ_TARGET_FILE(const char * tgtlistfile)
 	}
 
 	printk(KERN_ALERT "CPS - Opened the %s successfully(%d)\n", tgtlistfile, CPS_TGT_FILE_NUM);
-	// Target file object check;
-	// printk(KERN_ALERT "CPS - Target File List");
-	// for( i = 0 ; i < CPS_TGT_FILE_NUM ; i++ )
-	// 	printk(KERN_ALERT "CPS - [LEVEL %d %s:%s]\n", CPS_tgt_files[i].level , CPS_tgt_files[i].name, CPS_tgt_files[i].func);
-
 	CPS_TARGET_ONLY = 1; 	// trace target only
+	
 	return 0;
 }
 static inline int CPS_GET_TARGET_LEVEL( const char * filename, const char * funcname )
@@ -202,16 +185,6 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 	while(filestart_i > 0 && filename[filestart_i-1] != '/')
 		filestart_i--;
 
-	//if diffent file, show file name
-	// if( current_filename != filename )
-	// {
-	// 	sprintf(kstr,"%s\033[0;31mCPS -\e[1m in %s\e[m\033[0m", log_level, &(filename[filestart_i]));
-	// 	printk(kstr);
-	// }
-
-	// check call stack
-	// printk("%s Caller:%ps  Callee:%ps\n", log_level, caller, callee);
-
 	CPS_OPEN_FUNC(caller, callee);
 	for (tab_i= 0; tab_i < CPS_CALL_DEEP*2; tab_i++)
 	{
@@ -222,7 +195,7 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 	}
 	
 	//_builtin_return_address(0);
-	sprintf(kstr,"%s\033[0;31mCPS[%4d] - %s\e[1m%s->%s\e[m\033[0m", log_level, CPS_FUNC_COUNT, tab_str, &filename[filestart_i], funcname);
+	sprintf(kstr,"%s\033[0;31mCPS[%d] - %s\e[1m%s->%s\e[m\033[0m", log_level, CPS_FUNC_COUNT, tab_str, &filename[filestart_i], funcname);
 	
 	//print args
 	va_start(ap, argc);
@@ -251,7 +224,7 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 		else if( strcmp(typestr,"unsigned long *")==0)		sprintf(&(kstr[currentlen]), ":%p(%lu)]",
 															 (unsigned long*)(p_primi!=NULL?p_primi:(p_primi=va_arg(ap, long*))), 
 															*(unsigned long*)(p_primi!=NULL?p_primi:(p_primi=va_arg(ap, long*))));
-		else if( typestr[strlen(typestr)-1] == '*')	sprintf(&(kstr[currentlen]), ":%p]", va_arg(ap, void*));
+		else if( typestr[strlen(typestr)-1] == '*')	sprintf(&(kstr[currentlen]), ":%ps]", va_arg(ap, void*));
 		else if( strcmp(typestr,"int")==0)			sprintf(&(kstr[currentlen]), ":%d]", va_arg(ap, int));
 		else if( strcmp(typestr,"unsigned int")==0)	sprintf(&(kstr[currentlen]), ":%u]", va_arg(ap, int));
 		else if( strcmp(typestr,"long")==0)			sprintf(&(kstr[currentlen]), ":%ld]", va_arg(ap, long));
@@ -268,10 +241,11 @@ static inline void CPS_FUNCTION(void *caller, void *callee, const char * filenam
 
 	current_filename = (char *)filename;
 }
-// static inline void CPS_MSG(const char *str)
-// {
-// 	sprintf(kstr,"%s\033[0;31mCPSMSG -\e[1m %s\e[m\033[0m",
-// 		KERN_ALERT , str);
-// 	printk(kstr);
-// }
+static inline void CPS_MSG(const char *str)
+{
+	sprintf(kstr,"%s\033[0;31mCPSMSG -\e[1m %s\e[m\033[0m",
+		KERN_ALERT , str);
+	printk(kstr);
+}
+
 #endif /* CPS_TRACER_HBLK_H_ */
